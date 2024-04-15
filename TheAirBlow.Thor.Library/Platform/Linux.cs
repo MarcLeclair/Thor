@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using Serilog;
@@ -16,7 +17,7 @@ public class Linux : IHandler, IDisposable {
 
     public async Task<List<DeviceInfo>> GetDevices() {
         var list = new List<DeviceInfo>();
-        foreach (var bus in Directory.EnumerateDirectories("/dev/bus/usb/"))
+        foreach (var bus in Directory.EnumerateDirectories("/dev/bus/usb/")) 
         foreach (var device in Directory.EnumerateFiles(bus)) {
             try {
                 using var file = new FileStream(device, FileMode.Open, FileAccess.Read);
@@ -52,6 +53,7 @@ public class Linux : IHandler, IDisposable {
 
     public void Initialize(string? id, byte[]? direct = null) {
         Stream? file; var path = "";
+
         if (id != null) {
             id = id.Replace(":", "/");
             path = $"/dev/bus/usb/{id}";
@@ -280,28 +282,27 @@ public class Linux : IHandler, IDisposable {
         private const int _IOC_NRBITS = 8;
         private const int _IOC_TYPEBITS = 8;
         private const int _IOC_SIZEBITS = 14;
+        private const int _IOC_DIRBITS = 2;
+
         private static readonly int _IOC_NRSHIFT = 0;
         private static readonly int _IOC_TYPESHIFT = _IOC_NRSHIFT + _IOC_NRBITS;
         private static readonly int _IOC_SIZESHIFT = _IOC_TYPESHIFT + _IOC_TYPEBITS;
         private static readonly int _IOC_DIRSHIFT = _IOC_SIZESHIFT + _IOC_SIZEBITS;
-        private static uint _IO(uint type, uint nr)
-            => (0U << _IOC_DIRSHIFT) | (type << _IOC_TYPESHIFT) 
-                                     | (nr << _IOC_NRSHIFT) | (0U << _IOC_SIZESHIFT);
-        private static uint _IOWR(uint type, uint nr, uint size)
-            => ((1U | 2U) << _IOC_DIRSHIFT) | (type << _IOC_TYPESHIFT) 
-                                            | (nr << _IOC_NRSHIFT) | (size << _IOC_SIZESHIFT);
-        private static uint _IOR(uint type, uint nr, uint size)
-            => (2U << _IOC_DIRSHIFT) | (type << _IOC_TYPESHIFT) 
-                                     | (nr << _IOC_NRSHIFT) | (size << _IOC_SIZESHIFT);
-        private static uint _IOW(uint type, uint nr, uint size)
-            => (1U << _IOC_DIRSHIFT) | (type << _IOC_TYPESHIFT) 
-                                     | (nr << _IOC_NRSHIFT) | (size << _IOC_SIZESHIFT);
+
+        private static uint _IO(char type, int nr) => _IOC(0, type, nr, 0);
+        private static uint _IOR(char type, int nr, uint size) => _IOC(2, type, nr, size);
+        private static uint _IOW(char type, int nr, uint size) => _IOC(1, type, nr, size);
+        private static uint _IOWR(char type, int nr, uint size) => _IOC(3, type, nr, size);
+
+        private static uint _IOC(uint dir, char type, int nr, uint size) =>
+            (dir << _IOC_DIRSHIFT) | ((uint)type << _IOC_TYPESHIFT) |
+            ((uint)nr << _IOC_NRSHIFT) | (size << _IOC_SIZESHIFT);
         public static uint USBDEVFS_SETINTERFACE = _IOR('U', 4, (uint)sizeof(SetInterface));
-        public static uint USBDEVFS_GETDRIVER = _IOW('U', 8, (uint)sizeof(GetDriver));
+        public static uint USBDEVFS_GETDRIVER = _IOW('U', 8, (uint)Marshal.SizeOf<GetDriver>());
         public static uint USBDEVFS_BULK = _IOWR('U', 2, (uint)sizeof(BulkTransfer));
         public static uint USBDEVFS_IOCTL = _IOWR('U', 18, (uint)sizeof(UsbIoCtl));
         public static uint USBDEVFS_RELEASEINTERFACE = _IOR('U', 16, sizeof(uint));
-        public static uint USBDEVFS_CLAIMINTERFACE = _IOR('U', 15, sizeof(uint));
+        public static uint USBDEVFS_CLAIMINTERFACE = _IOR('U', 15, (uint)Marshal.SizeOf(typeof(uint))); 
         public static uint USBDEVFS_DISCONNECT = _IO('U', 22);
         public static uint USBDEVFS_CONNECT = _IO('U', 23);
         public static uint USBDEVFS_RESET = _IO('U', 20);
@@ -358,12 +359,19 @@ public class Linux : IHandler, IDisposable {
         
         [DllImport("libc", EntryPoint = "strerror")]
         public static extern nint StrError(int code);
-        
-        public static void HandleError(string message) {
+
+        public static void HandleError(string message)
+        {
             var error = Marshal.GetLastWin32Error();
-            var ptr = StrError(error);
-            var str = Marshal.PtrToStringUTF8(ptr);
-            throw new ApplicationException($"{message}: {str} ({error})");
+            var errorMsg = StrError(error);
+            Log.Debug($"Error {error}: {errorMsg} - {message}");
+            throw new ApplicationException($"{message}: {errorMsg} (Error code: {error})");
+        }
+
+
+        public static void LogIoctlCode(string name, uint code)
+        {
+            Log.Debug($"{name}: {code}");
         }
     }
 }

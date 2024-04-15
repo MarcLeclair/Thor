@@ -1,24 +1,31 @@
 ﻿using Serilog;
 using Spectre.Console;
+using System.Diagnostics;
 using TheAirBlow.Thor.Library;
 using TheAirBlow.Thor.Library.Communication;
+using TheAirBlow.Thor.Library.Platform;
 using TheAirBlow.Thor.Library.Protocols;
 using TheAirBlow.Thor.Shell;
 using TheAirBlow.Thor.Shell.Commands;
 using TheAirBlow.Thor.Shell.Commands.ProtoOdin;
 using PrintPIT = TheAirBlow.Thor.Shell.Commands.PrintPIT;
 using RawWrite = TheAirBlow.Thor.Shell.Commands.RawWrite;
+using System.Linq;
 
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    .MinimumLevel.Debug()
     .WriteTo.Console()
     .CreateLogger();
 AnsiConsole.MarkupLine("[green]Welcome to Thor Shell v1.0.4![/]");
 if (!USB.TryGetHandler(out var handler)) {
-    AnsiConsole.MarkupLine("[red]A USB handler wasn't written for your platform![/]");
-    AnsiConsole.MarkupLine($"[red]Currently supported platforms: {USB.GetSupported()}.[/]");
-    return;
+    string busId;
+    bool isShared;
+    USB.GetSamsungDeviceBusId(out string samsungBusId, out bool shared);
+    USB.BindDevice(samsungBusId);
+    USB.AttachDevice(samsungBusId);
 }
+
+
 
 await AnsiConsole.Status().StartAsync(
     "[darkorange]Please be patient, loading device name database...[/]", 
@@ -33,15 +40,15 @@ await AnsiConsole.Status().StartAsync(
             case Lookup.InitState.Cache:
                 AnsiConsole.MarkupLine("[green]Successfully loaded \"[lime]usb.ids[/]\" from cache.[/]");
                 break;
-        }
+        } 
     });
 
 AnsiConsole.MarkupLine("[green]Type \"[lime]help[/]\" for list of commands.[/]");
 AnsiConsole.MarkupLine("[green]To start off, type \"[lime]connect[/]\" to initiate a connection.[/]");
 AnsiConsole.MarkupLine("[yellow]~~~~~~~~ Platform specific notes ~~~~~~~~[/]");
-AnsiConsole.MarkupLine($"[yellow]{handler.GetNotes()}[/]");
 
-// Load in all commands
+
+// Load in all commands0-  
 Dictionary<string, ICommand> commands = new() {
     { "disconnect", new Disconnect() },
     { "printPit", new PrintPIT() },

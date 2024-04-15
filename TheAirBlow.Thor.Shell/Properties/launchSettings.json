@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "TheAirBlow.Thor.Shell": {
+      "commandName": "Project",
+      "remoteDebugEnabled": true,
+      "justMyCode": false
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": "Ubuntu"
+    }
+  }
+}
